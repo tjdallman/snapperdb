@@ -346,7 +346,7 @@ delete from strains_snps, strain_clusters, variants, strain_stats, variants, ign
 
 This section details an example of setting up a SnapperDB database for *Salmonella* Enteritidis.
 
-The first thing to do is to select a *Salmonella* Enteritidis reference genome.  At PHE we use the PT4 epidemic strain P125109 - Accession AM933172.  We've have put all the reference genomes we use in the following github repository https://github.com/phe-bioinformatics/snapperdb_references.  You can download the file AM933172.fa from there.  Next we need to create the corresponding config file to tell SnapperDB where to make the postgres database, and how to perform the mapping and variant calling.  The SnapperDB configs can also be found in the above github repo.  The *S* Enteritidis config is called ebg4_config.txt (EBG4 is the MLST Eburst Group that defines *S* Enteritidis).  Download the file and lets look inside:
+The first thing to do is to select a *Salmonella* Enteritidis reference genome.  We use the PT4 epidemic strain P125109 - Accession AM933172.  We've have put all the reference genomes we use in the following github repository https://github.com/phe-bioinformatics/snapperdb_references.  You can download the file AM933172.fa from there.  Next we need to create the corresponding config file to tell SnapperDB where to make the postgres database, and how to perform the mapping and variant calling.  The SnapperDB configs can also be found in the above github repo.  The *S* Enteritidis config is called ebg4_config.txt (EBG4 is the MLST Eburst Group that defines *S* Enteritidis).  Download the file and lets look inside:
 
 ```sh
 snpdb_name ebg_4_snps
@@ -383,7 +383,7 @@ snapperdb.py make_snpdb -c ebg4_config.txt
 
 The first thing SnapperDB will do is simulate some FASTQ reads for AM933172.fa with Samtools wgsim and map them against the FASTA file using BWA MEM.  Variant calling will be taken care of by GATK and the VCF filtered to call variants with an MQ > 30, mapped by at least 10 reads in which at least 90% of the bases support the variant call.  Positions that don't meet this criteria will also be recorded as 'ignored positions'.  The SNPs and ignored positions will be injected into the postgres database and the reference genome given the SNP address 1.1.1.1.1.1.1
 
-Now we have a SnapperDB database we can add some other *S* Enteritidis genomes.  Let's download some from the PHE Pathogens *Salmonella* NCBI Bioproject PRJNA248792.  Here is a set of 8 genomes.
+Now we have a SnapperDB database we can add some other *S* Enteritidis genomes.  Let's download some from the UKHSA Pathogens *Salmonella* NCBI Bioproject PRJNA248792.  Here is a set of 8 genomes.
 - ERR2200244
 - SRR5055288
 - SRR5194193
