@@ -1,0 +1,11 @@
+snpdb_name salm_ent
+reference_genome AM933172
+pg_uname timdallman
+pg_pword
+pg_host localhost
+depth_cutoff 10
+mq_cutoff 30
+ad_cutoff 0.9
+average_depth_cutoff 30
+mapper bwa
+variant_caller gatk
