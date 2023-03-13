@@ -17,29 +17,13 @@ SnapperDB is intended to be used at the clonal complex / eBURST group level wher
 
 ### Version
 
-1.0.6
+1.1.0
 
 ---
 
 ### Installation:
 
 SnapperDB is available at https://github.com/tjdallman/snapperdb
-
-It is available by pip
-```bash
-$ pip install snapperdb
-```
-
-also from conda
-```bash
-$ conda install -c tdallman snapperdb
-```
-
-
-and from source:
-```bash
-$ git clone https://github.com/phe-bioinformatics/snapperdb.git
-```
 
 
 ---

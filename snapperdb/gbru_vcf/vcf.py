@@ -239,6 +239,7 @@ class Vcf:
 
 
     def define_fastq_paths(self,args):
+        args.fastqs = []
         args.fastqs.append(os.path.join(snapperdb.__ref_genome_dir__, self.reference_genome + '.R1.fastq.gz'))
         args.fastqs.append(os.path.join(snapperdb.__ref_genome_dir__, self.reference_genome + '.R2.fastq.gz'))
 

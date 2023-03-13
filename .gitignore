@@ -1,0 +1,10 @@
+*.fastq.gz
+*.pyc
+.project
+.idea
+.pydevproject
+.DS_store
+logs
+reference_genomes
+user_configs
+*.log
