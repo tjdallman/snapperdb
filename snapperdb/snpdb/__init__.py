@@ -15,8 +15,45 @@ from snapperdb.gbru_vcf.vcf import Vcf
 from snapperdb import parse_config
 import pprint
 import time
+import math
+import concurrent.futures as cf
 
 
+# -------------------------------------------------------------------------------------------------
+
+def snippy_to_db(args, config_dict):
+    logger = logging.getLogger('snapperdb.snpdb.snippy_to_db')
+    logger.info('Initialising SNPdb class')
+    #create snpdb class
+    snpdb = SNPdb(config_dict)
+
+    #parse config into snpdb object
+    logger.info('Parsing config dict')
+    snpdb.parse_config_dict(config_dict)
+
+    #connect to snpdb postgres
+    snpdb._connect_to_snpdb()
+    snpdb.snpdb_conn = psycopg2.connect(snpdb.conn_string)
+
+    #read the reference fasta
+    ref_seq_file = os.path.join(snapperdb.__ref_genome_dir__, snpdb.reference_genome + '.fa')
+    ref_seq = read_multi_contig_fasta(ref_seq_file)
+
+    #read_strain_file
+    strain_seq = read_multi_contig_fasta(args.aln)
+
+    #compare_aln_and_add_to_vcf_object
+    vcf = Vcf()
+    vcf.sample_name = args.name
+    vcf.create_snippy_vcf(ref_seq, strain_seq, snpdb)
+
+    logger.info('Uploading to SNPdb')
+    #upload vcf
+    snpdb.snpdb_upload(vcf,args)
+    #annotate vars
+    logger.info('Annotating new variants')
+
+    snpdb.snpdb_annotate_vars(vcf)
 
 def vcf_to_db(args, config_dict, vcf):
     #set up loggging
@@ -52,7 +89,10 @@ def vcf_to_db(args, config_dict, vcf):
     ref_seq = read_multi_contig_fasta(ref_seq_file)
 
     #read vcf
-    vcf.read_multi_contig_vcf(ref_seq)
+    #vcf.read_multi_contig_vcf(ref_seq)
+
+    vcf.read_vcf_bcftools(ref_seq, snpdb)
+
     logger.info('Uploading to SNPdb')
     #upload vcf
     snpdb.snpdb_upload(vcf,args)
@@ -257,11 +297,11 @@ def get_the_snps(args, config_dict):
     #query snadb
     snpdb.parse_args_for_get_the_snps_mc(args, strain_list, ref_seq, snpdb.reference_genome, rec_dict)
 
-    snpdb.print_fasta_mc(args, rec_dict)
+    snpdb.print_fasta_mc(args, rec_dict, ref_seq)
 
     #print matrix
-    if args.mat_flag == 'Y':
-        snpdb.print_matrix(args.out)
+    #if args.mat_flag == 'Y':
+    #    snpdb.print_matrix(args.out)
     # print variant list
     if args.var_flag == 'Y':
         logger.info('Printing variants')
@@ -401,7 +441,7 @@ def untar_file(file_path):
 # -------------------------------------------------------------------------------------------------
 # -------------------------------------------------------------------------------------------------
 def chunks(l, n):
-    for i in xrange(0, len(l), n):
+    for i in range(0, len(l), n):
         yield l[i:i + n]
 
 def update_distance_matrix(config_dict, args):
@@ -417,10 +457,50 @@ def update_distance_matrix(config_dict, args):
     if update_strain:
         print ("###  Populating distance matrix: " + str(datetime.datetime.now()))
         snpdb.parse_args_for_update_matrix(snp_co, strain_list)
-        if args.hpc == 'N':
+        print (args.threads)
+        if args.hpc == 'N' and args.threads == 'N':
             print ('### Launching serial update_distance_matrix ' + str(datetime.datetime.now()))
             snpdb.check_matrix(strain_list, update_strain)
-            snpdb.update_clusters()
+            #snpdb.update_clusters(accept,place,full)
+        elif args.hpc == 'N':
+            print ('### Launching multi-processed update_distance_matrix ' + str(datetime.datetime.now()))
+            
+            present_strains = list(set(strain_list) - set(update_strain))
+            chunksize = math.ceil(len(update_strain)/int(args.threads))
+            
+            snpdb.shared_ig_pos()
+            snpdb.get_ignored_pos(strain_list)
+
+            #remove connection before mp
+            snpdb.snpdb_conn = None
+
+            futures = []
+            newrows = []
+            #mp the comparison against the database
+            with cf.ProcessPoolExecutor(max_workers=int(args.threads)) as executor:
+                for idx, one_strain in enumerate(chunks(list(update_strain), chunksize)):
+                    #print (one_strain, present_strains)
+                    futures.append(executor.submit(snpdb.check_matrix_mp, present_strains, one_strain))
+                for f in futures:
+                    newrows = newrows + f.result()
+            executor.shutdown()
+
+            snpdb._connect_to_snpdb()
+            snpdb.add_new_rows(newrows)
+
+            #remove connection before mp
+            snpdb.snpdb_conn = None
+            #mp the comparison against themselves
+            with cf.ProcessPoolExecutor(max_workers=int(args.threads)) as executor:
+                for idx, one_strain in enumerate(chunks(list(update_strain), chunksize)):
+                    update_strain = list(set(update_strain) - set (one_strain))
+                    futures.append(executor.submit(snpdb.check_matrix_mp, update_strain, one_strain))
+                for f in futures:
+                    newrows = newrows + f.result()
+
+            snpdb._connect_to_snpdb()
+            snpdb.add_new_rows(newrows)
+
         else:
             print ('### Launching parallel update_distance_matrix ' +str(datetime.datetime.now()))
             present_stains = list(set(strain_list) - set(update_strain))

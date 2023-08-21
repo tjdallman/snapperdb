@@ -11,7 +11,7 @@ import datetime
 from snapperdb import __version__, parse_config
 from snapperdb.gbru_vcf import fastq_to_vcf, make_fastq
 from snapperdb.snpdb import vcf_to_db, make_snpdb, get_the_snps, update_distance_matrix,\
-                            update_clusters, add_ref_cluster, qsub_to_check_matrix, export_json, import_json, ignore_isolate, accept_outlier, get_nlessness
+                            update_clusters, add_ref_cluster, qsub_to_check_matrix, export_json, import_json, ignore_isolate, accept_outlier, get_nlessness, snippy_to_db
 
 
 def setup_logging(args):
@@ -63,6 +63,11 @@ def run_command(args):
         logger.info('PARAMS: config = %s; vcf = %s' % (args.config_file, args.vcf))
         # third argument is for an instance of a vcf class, which doesnt exist in this case
         vcf_to_db(args, config_dict, None)
+    elif args.command == 'add_snippy':
+        logger = logging.getLogger('snapperdb.add_snippy')
+        logger.info('PARAMS: config = %s; name = %s' % (args.config_file, args.name))
+        # third argument is for an instance of a vcf class, which doesnt exist in this case
+        snippy_to_db(args, config_dict)
     elif args.command == 'update_distance_matrix':
         logger = logging.getLogger('snapperdb.update_distance_matrix')
         logger.info('PARAMS: config = %s;' % (args.config_file))
@@ -200,7 +205,9 @@ def main():
                                                help='')
 
     parser_update_distance_matrix.add_argument('-m', dest='hpc', default='N',
-                                               help='This will submit parallelise the matrix update')
+                                               help='This will submit jobs to a HPC to parallelise the matrix update')
+    parser_update_distance_matrix.add_argument('-t', dest='threads', default='N',
+                                               help='This will parallelise the matrix update on a single machine')
 
     parser_qsub_to_check_matrix = subparsers.add_parser('qsub_to_check_matrix', help='This is only for internal use by snapperdb'
                                                                                ' when update matrix is being run in hpc mode.')
@@ -229,8 +236,6 @@ def main():
     parser_get_the_snps.add_argument('-a', dest='alignment_type',
                                      help='Alignment type (W=whole Consensus, A=Soft Core, C=Core), default is alignments where at least 80%% of the samples are A/C/T/G at each position (A:80)',
                                      default='A:80')
-    parser_get_the_snps.add_argument('-x', dest='mat_flag',
-                                     help='Would you like a pairwise distance matrix? Y/N (default = N)', default='N')
     parser_get_the_snps.add_argument('-v', dest='var_flag', help='Would you like a more detailed list of the variant '
                                                                  'attributes? Y/N (default = N)')
     parser_get_the_snps.add_argument('-r', dest='ref_flag',
@@ -302,8 +307,15 @@ def main():
     parser_get_nlessness.add_argument('-p', dest = 'print_to_csv', action="store_false", default = True, help = 'optional, produce a csv file with results by default, use flag if you DO NOT want the csv file.')
     parser_get_nlessness.add_argument('-g', dest='log_dir', default=os.getcwd(),
                                      help='Where do you want the logs written to? Will default to cwd')
-
-    parser_prepare_reference = subparsers.add_parser('prepare_reference', help = 'Prepare ref ffor new snapperdb instance. Like make_snpdb, but without settign up the db.')
+    parser_add_snippy = subparsers.add_parser('add_snippy', help = 'Add strain from SNIPPY output')
+    parser_add_snippy.add_argument('-c', dest='config_file', metavar='Config file', required=True,
+                                        help='The name of a config file in the user_configs directory (not the full path)')
+    parser_add_snippy.add_argument('-n', dest = 'name', default = True, help = 'supply name of isolate to add')
+    parser_add_snippy.add_argument('-a', dest = 'aln', required = True, help = 'supply Snippy alignment to add')
+    parser_add_snippy.add_argument('-f', dest='force', default='N', help='Force samples if depth is absent or below cutoff')
+    parser_add_snippy.add_argument('-g', dest='log_dir', default=os.getcwd(),
+                                     help='Where do you want the logs written to? Will default to cwd')
+    parser_prepare_reference = subparsers.add_parser('prepare_reference', help = 'Prepare ref for new snapperdb instance. Like make_snpdb, but without settign up the db.')
     parser_prepare_reference.add_argument('-c', dest='config_file', metavar='Config file', required=True,
                                         help='The name of a config file in the user_configs directory (not the full path)')
     parser_prepare_reference.add_argument('-g', dest='log_dir', default=os.getcwd(),

@@ -35,21 +35,22 @@ SnapperDB is available at https://github.com/tjdallman/snapperdb
 - Python >= 2.7
 - biopython
 - psycopg2
-- paramiko
-- hashids
-- joblib
 
 **Postgres**
 
 Postgres package can be downloaded from https://www.postgresql.org/
 
-**PHEnix**
-
-PHEnix is available from https://github.com/phe-bioinformatics/PHEnix
-
 **Samtools**
 
 Samtools can be downloaded from https://github.com/samtools/samtools. It is used to filter and convert to SAM/BAM files and in mpileup variant caller.
+
+**SamClip**
+
+Samclip can be downloaded from https://github.com/tseemann/samclip.  It is used to filter soft and hard alignents from the SAM file
+
+**bcftools**
+
+bcftools can be downloaded from https://samtools.github.io/bcftools/bcftools.html.  It is used to parse the VCF file to identify variant postions and postions to be ignored.
 
 **Picard**
 
@@ -89,6 +90,10 @@ SnapperDB has several sub commands that can be invoked and are summarised below.
 |get_strains | Return the strains in the database and their SNP addresses
 |export_json | Produce JSON for import to another SnapperDB database
 |import_json | Import JSON exported from another SnapperDB database
+|get_nlessness | Caluculate the mean nless distance and N50
+|prepare_reference | Prepare ref for new snapperdb instance. Like make_snpdb, but without settign up the db
+|add_snippy | Add strain from SNIPPY alignment output
+
 ---
 
 ### Creating a Database
