@@ -876,7 +876,6 @@ class SNPdb:
                                     rec_flag = True
                             if rec_flag == False:
                                 
-                                ig_flag = False
                                 if i in self.n_look[contig]:
                                     #check it's not a high frequency N
                                     if (float(float(self.n_look[contig][i]) / float(len(self.strains_snps)-1)*100) > float(100-float(co))):
@@ -885,10 +884,16 @@ class SNPdb:
                                 #check if that ignored position in this strain
                                 if i in self.igposIDMap[contig] and ig_flag == False:
                                     if self.igposIDMap[contig][i] in self.igpos[strain]:
-                                        #check it's not an N in all strains
-                                         if self.n_look[contig][i] < (len(self.strains_snps)-1):
+                                        #check it's not an N or an N + all var in all strains
+                                         # get the var_count
+                                         var_count = 0
+                                         if i in self.var_look[contig]:
+                                            var_count=self.var_look[contig][i]
+                                         if self.n_look[contig][i]+var_count < (len(self.strains_snps)):
                                                 f.write('N')
                                                 n_flag = True
+                                         else:
+                                                ig_flag = True
                                 #can we print a variant
                                 if i in self.posIDMap[contig] and n_flag == False and ig_flag == False:
                                     for v in self.posIDMap[contig][i]:
