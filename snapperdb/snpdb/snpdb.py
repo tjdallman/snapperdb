@@ -1222,15 +1222,28 @@ class SNPdb:
 
 # -------------------------------------------------------------------------------------------------
 
+    def chunks(self, l, n):
+        for i in range(0, len(l), n):
+            yield l[i:i + n]
+
+
+
+# -------------------------------------------------------------------------------------------------
+
     def check_matrix_mp(self, data_list, update_strain):
         
 
         seen_strain = set()
+        self._connect_to_snpdb()
 
+        cur = self.snpdb_conn.cursor()
 
         newrows = []
         #add the reference genomes bad positions
+        ref_ig_pos = set()
+        ref_ig_pos = self.get_bad_pos_for_strain_update_matrix(self.reference_genome)
 
+        #create chunks of dataset
 
         for strain1 in update_strain:
             seen_strain.add(strain1)
@@ -1238,29 +1251,43 @@ class SNPdb:
             # get ids of all variants in strain1
             strain1_good_var = self.strains_snps[strain1]
             # get ids of all bad positions in strain1
-            # strain1_ig_pos = self.get_bad_pos_for_strain_update_matrix(strain1)
-            strain1_ig_pos = set(self.strain_ig_pos_mp[strain1])
+            strain1_ig_pos = self.get_bad_pos_for_strain_update_matrix(strain1)
+            #strain1_ig_pos = set(self.strain_ig_pos_mp[strain1])
 
             # don't loop over the ones already seen
             data_set = set(data_list).difference(seen_strain)
+            #create chunks of dataset
+            chunksize = math.ceil(len(data_set)/int(200))
+            #chunck_list = self.chunks(data_set, chunksize)
+            #print (chunksize)
 
-            for strain2 in data_set:
-                # get ids of all variants in strain2
-                strain2_good_var = self.strains_snps[strain2]
-                # get ids of all bad positions in strain2
-                # strain2_ig_pos = self.get_bad_pos_for_strain_update_matrix(strain2)
-                strain2_ig_pos = self.strain_ig_pos_mp[strain2]
-                # get union of bad position ids
-                all_bad_ids = strain1_ig_pos | set(strain2_ig_pos) | set (self.strain_ig_pos_share)
-                # get symmetric difference of variant ids
-                all_var = set(strain1_good_var) ^ set(strain2_good_var)
-                # get sets of (position, contig) tuples
-                all_var_pos = set([(self.variants[var_id].pos, self.variants[var_id].contig) for var_id in all_var])
-                all_bad_pos = set([(self.IgPos_container[bad_id].pos, self.IgPos_container[bad_id].contig) for bad_id in all_bad_ids])
-                # the difference is the number of variants that are not at a bad position
-                diff = len(all_var_pos.difference(all_bad_pos))
-                #print strain1, strain2, diff
-                newrows.append((strain1, strain2, diff))
+            try:
+                for idx, one_strain in enumerate(self.chunks(list(data_set), chunksize)):
+                    #print (idx, strain1, one_strain)
+                    lookup = range(6500000)
+                    strain_ig_pos_dict = {}
+                    for strn in set(one_strain):
+                        strain_ig_pos_dict[strn] = [lookup[x] if x < 6500000 else x for x in self.get_bad_pos_for_strain_update_matrix(strn)]
+
+                    for strain2 in one_strain:
+                        # get ids of all variants in strain2
+                        strain2_good_var = self.strains_snps[strain2]
+                        # get ids of all bad positions in strain2
+                        # strain2_ig_pos = self.get_bad_pos_for_strain_update_matrix(strain2)
+                        strain2_ig_pos = strain_ig_pos_dict[strain2]
+                        # get union of bad position ids
+                        all_bad_ids = set(strain1_ig_pos) | set(strain2_ig_pos) | set(ref_ig_pos)
+                        # get symmetric difference of variant ids
+                        all_var = set(strain1_good_var) ^ set(strain2_good_var)
+                        # get sets of (position, contig) tuples
+                        all_var_pos = set([(self.variants[var_id].pos, self.variants[var_id].contig) for var_id in all_var])
+                        all_bad_pos = set([(self.IgPos_container[bad_id].pos, self.IgPos_container[bad_id].contig) for bad_id in all_bad_ids])
+                        # the difference is the number of variants that are not at a bad position
+                        diff = len(all_var_pos.difference(all_bad_pos))
+                        #print strain1, strain2, diff
+                        newrows.append((strain1, strain2, diff))
+            except:
+                print ("Nothing to do for %s" % (strain1,))
         # add to db (do this outside the loop for multithreading)
         return newrows
 

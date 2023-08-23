@@ -468,8 +468,8 @@ def update_distance_matrix(config_dict, args):
             present_strains = list(set(strain_list) - set(update_strain))
             chunksize = math.ceil(len(update_strain)/int(args.threads))
             
-            snpdb.shared_ig_pos()
-            snpdb.get_ignored_pos(strain_list)
+            #snpdb.shared_ig_pos()
+            #snpdb.get_ignored_pos(strain_list)
 
             #remove connection before mp
             snpdb.snpdb_conn = None
@@ -479,22 +479,26 @@ def update_distance_matrix(config_dict, args):
             #mp the comparison against the database
             with cf.ProcessPoolExecutor(max_workers=int(args.threads)) as executor:
                 for idx, one_strain in enumerate(chunks(list(update_strain), chunksize)):
-                    #print (one_strain, present_strains)
                     futures.append(executor.submit(snpdb.check_matrix_mp, present_strains, one_strain))
                 for f in futures:
                     newrows = newrows + f.result()
             executor.shutdown()
 
+
             snpdb._connect_to_snpdb()
             snpdb.add_new_rows(newrows)
+
+            futures = []
+            newrows = []
 
             #remove connection before mp
             snpdb.snpdb_conn = None
             #mp the comparison against themselves
             with cf.ProcessPoolExecutor(max_workers=int(args.threads)) as executor:
                 for idx, one_strain in enumerate(chunks(list(update_strain), chunksize)):
-                    update_strain = list(set(update_strain) - set (one_strain))
+                    #print (one_strain, update_strain)
                     futures.append(executor.submit(snpdb.check_matrix_mp, update_strain, one_strain))
+                    update_strain = set(update_strain) - set(one_strain)
                 for f in futures:
                     newrows = newrows + f.result()
 
