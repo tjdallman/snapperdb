@@ -17,6 +17,8 @@ from snapperdb.snpdb.variant import Variant
 import snapperdb
 from copy import deepcopy
 import csv
+from tqdm import tqdm
+
 
 
 class Igpos:
@@ -596,6 +598,37 @@ class SNPdb:
         cur = self.snpdb_conn.cursor()
         #create ignored pos container where key is id
         igPos_container = {}
+        #pos_2_id_list = {}
+        strain_names = tuple(self.strains_snps.keys())
+
+        sql = "select pos, id, contig from ignored_pos JOIN (select distinct unnest(ignored_pos) as unnested_id from strains_snps where name in %s) as unnested_table1 ON ignored_pos.id = unnested_table1.unnested_id"
+        strain_names = tuple(self.strains_snps.keys())
+        cur.execute(sql, (strain_names,))
+        rows = cur.fetchall()
+        for row in rows:
+            #ig_pos = Igpos()
+            ##ig_pos.pos = row[0]
+            #ig_pos.id = row[1]
+            #ig_pos.contig = row[2]
+            igPos_container[row[1]] = [row[2], row[0]]
+
+            #try:
+            #    pos_2_id_list[row[2]][row[0]] = row[1]
+            ##except:
+            #   pos_2_id_list[row[2]] = {}
+            #    pos_2_id_list[row[2]][row[0]] = row[1]                            
+
+        return igPos_container
+
+
+# -------------------------------------------------------------------------------------------------
+
+
+
+    def get_igs_mc_gts(self):
+        cur = self.snpdb_conn.cursor()
+        #create ignored pos container where key is id
+        igPos_container = {}
         pos_2_id_list = {}
         strain_names = tuple(self.strains_snps.keys())
 
@@ -604,11 +637,11 @@ class SNPdb:
         cur.execute(sql, (strain_names,))
         rows = cur.fetchall()
         for row in rows:
-            ig_pos = Igpos()
-            ig_pos.pos = row[0]
-            ig_pos.id = row[1]
-            ig_pos.contig = row[2]
-            igPos_container[row[1]] = ig_pos
+            #ig_pos = Igpos()
+            #ig_pos.pos = row[0]
+            #ig_pos.id = row[1]
+            #ig_pos.contig = row[2]
+            igPos_container[row[1]] = [row[2], row[0]]
 
             try:
                 pos_2_id_list[row[2]][row[0]] = row[1]
@@ -662,13 +695,13 @@ class SNPdb:
                     #set the reference position to a N
                     #fasta[strain][self.IgPos_container[bad_ids].contig][self.IgPos_container[bad_ids].pos-1] = 'N'
                     try:
-                        n_look[self.IgPos_container[bad_ids].contig][self.IgPos_container[bad_ids].pos] = n_look[self.IgPos_container[bad_ids].contig][self.IgPos_container[bad_ids].pos] + 1
+                        n_look[self.IgPos_container[bad_ids][0]][self.IgPos_container[bad_ids][1]] = n_look[self.IgPos_container[bad_ids][0]][self.IgPos_container[bad_ids][1]] + 1
                     except:
                         try:
-                            n_look[self.IgPos_container[bad_ids].contig][self.IgPos_container[bad_ids].pos] = 1
+                            n_look[self.IgPos_container[bad_ids][0]][self.IgPos_container[bad_ids][1]] = 1
                         except:
-                            n_look[self.IgPos_container[bad_ids].contig] = {}
-                            n_look[self.IgPos_container[bad_ids].contig][self.IgPos_container[bad_ids].pos] = 1
+                            n_look[self.IgPos_container[bad_ids][0]] = {}
+                            n_look[self.IgPos_container[bad_ids][0]][self.IgPos_container[bad_ids][1]] = 1
 
                 # add the ignored pos from the referecne genome - removed as added explictly to every strain on input
                 #for bad_ids in self.igpos[reference_genome_name]:
@@ -689,13 +722,13 @@ class SNPdb:
             for bad_ids in self.igpos[reference_genome_name]:
                 #fasta[reference_genome_name][self.IgPos_container[bad_ids].contig][self.IgPos_container[bad_ids].pos-1] = 'N'
                 try:
-                    n_look[self.IgPos_container[bad_ids].contig][self.IgPos_container[bad_ids].pos] = n_look[self.IgPos_container[bad_ids].contig][self.IgPos_container[bad_ids].pos] + 1
+                    n_look[self.IgPos_container[bad_ids][0]][self.IgPos_container[bad_ids][1]] = n_look[self.IgPos_container[bad_ids][0]][self.IgPos_container[bad_ids][1]] + 1
                 except:
                     try:
-                        n_look[self.IgPos_container[bad_ids].contig][self.IgPos_container[bad_ids].pos] = 1
+                        n_look[self.IgPos_container[bad_ids][0]][self.IgPos_container[bad_ids][1]] = 1
                     except:
-                        n_look[self.IgPos_container[bad_ids].contig] = {}
-                        n_look[self.IgPos_container[bad_ids].contig][self.IgPos_container[bad_ids].pos] = 1     
+                        n_look[self.IgPos_container[bad_ids][0]] = {}
+                        n_look[self.IgPos_container[bad_ids][0]][self.IgPos_container[bad_ids][1]] = 1     
         else:
               del self.strains_snps[reference_genome_name]
         return fasta, var_look, n_look,var_id_list
@@ -758,7 +791,7 @@ class SNPdb:
         print ('### Creating Ignored Positions Objects')
 
         self.all_bad_pos = []
-        self.IgPos_container, self.igposIDMap = self.get_igs_mc()
+        self.IgPos_container, self.igposIDMap = self.get_igs_mc_gts()
 
 
         if rec_dict:
@@ -769,7 +802,7 @@ class SNPdb:
             total_ig = 0
 
 
-            all_bad_pos = set([(self.IgPos_container[bad_id].pos) for bad_id in self.badlist])
+            all_bad_pos = set([(self.IgPos_container[bad_id][1]) for bad_id in self.badlist])
             for contig in rec_dict:
                 total_mask = total_mask + len(set(all_bad_pos) - set(rec_dict[contig]))
 
@@ -1097,7 +1130,14 @@ class SNPdb:
                 uniq_isos['dist_matrix'] = uni_snps
 
         return uniq_isos
-        
+
+    def sizeof_fmt(self,num, suffix='B'):
+        ''' by Fred Cirera,  https://stackoverflow.com/a/1094933/1870254, modified'''
+        for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
+            if abs(num) < 1024.0:
+                return "%3.1f %s%s" % (num, unit, suffix)
+            num /= 1024.0
+        return "%.1f %s%s" % (num, 'Yi', suffix)
 
     def parse_args_for_update_matrix(self, snp_co, strain_list):
 
@@ -1109,7 +1149,7 @@ class SNPdb:
         #get actual variant objects
         self.variants, self.posIDMap = self.get_variants_mc()
         #get ignored positions object
-        self.IgPos_container, self.igposIDMap = self.get_igs_mc()
+        self.IgPos_container = self.get_igs_mc()
 
 
     def get_bad_pos_for_strain_update_matrix(self, strain):
@@ -1229,7 +1269,6 @@ class SNPdb:
 
 
 # -------------------------------------------------------------------------------------------------
-
     def check_matrix_mp(self, data_list, update_strain):
         
 
@@ -1242,14 +1281,13 @@ class SNPdb:
         #add the reference genomes bad positions
         ref_ig_pos = set()
         ref_ig_pos = self.get_bad_pos_for_strain_update_matrix(self.reference_genome)
-
         #create chunks of dataset
 
-        for strain1 in update_strain:
+        for strain1 in tqdm(update_strain):
             seen_strain.add(strain1)
             print ("Populating matrix for: " + strain1)
             # get ids of all variants in strain1
-            strain1_good_var = self.strains_snps[strain1]
+            #strain1_good_var = self.strains_snps[strain1]
             # get ids of all bad positions in strain1
             strain1_ig_pos = self.get_bad_pos_for_strain_update_matrix(strain1)
             #strain1_ig_pos = set(self.strain_ig_pos_mp[strain1])
@@ -1257,7 +1295,7 @@ class SNPdb:
             # don't loop over the ones already seen
             data_set = set(data_list).difference(seen_strain)
             #create chunks of dataset
-            chunksize = math.ceil(len(data_set)/int(200))
+            chunksize = math.ceil(len(data_set)/int(500))
             #chunck_list = self.chunks(data_set, chunksize)
             #print (chunksize)
 
@@ -1269,19 +1307,20 @@ class SNPdb:
                     for strn in set(one_strain):
                         strain_ig_pos_dict[strn] = [lookup[x] if x < 6500000 else x for x in self.get_bad_pos_for_strain_update_matrix(strn)]
 
+
                     for strain2 in one_strain:
                         # get ids of all variants in strain2
-                        strain2_good_var = self.strains_snps[strain2]
+                        #strain2_good_var = self.strains_snps[strain2]
                         # get ids of all bad positions in strain2
                         # strain2_ig_pos = self.get_bad_pos_for_strain_update_matrix(strain2)
-                        strain2_ig_pos = strain_ig_pos_dict[strain2]
+                        #strain2_ig_pos = strain_ig_pos_dict[strain2]
                         # get union of bad position ids
-                        all_bad_ids = set(strain1_ig_pos) | set(strain2_ig_pos) | set(ref_ig_pos)
+                        all_bad_ids = set(strain1_ig_pos) | set(strain_ig_pos_dict[strain2]) | set(ref_ig_pos)
                         # get symmetric difference of variant ids
-                        all_var = set(strain1_good_var) ^ set(strain2_good_var)
+                        all_var = set(self.strains_snps[strain1]) ^ set(self.strains_snps[strain2])
                         # get sets of (position, contig) tuples
                         all_var_pos = set([(self.variants[var_id].pos, self.variants[var_id].contig) for var_id in all_var])
-                        all_bad_pos = set([(self.IgPos_container[bad_id].pos, self.IgPos_container[bad_id].contig) for bad_id in all_bad_ids])
+                        all_bad_pos = set([(self.IgPos_container[bad_id][1], self.IgPos_container[bad_id][0]) for bad_id in all_bad_ids])
                         # the difference is the number of variants that are not at a bad position
                         diff = len(all_var_pos.difference(all_bad_pos))
                         #print strain1, strain2, diff

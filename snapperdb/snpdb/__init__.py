@@ -444,6 +444,14 @@ def chunks(l, n):
     for i in range(0, len(l), n):
         yield l[i:i + n]
 
+def sizeof_fmt(num, suffix='B'):
+    ''' by Fred Cirera,  https://stackoverflow.com/a/1094933/1870254, modified'''
+    for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
+        if abs(num) < 1024.0:
+            return "%3.1f %s%s" % (num, unit, suffix)
+        num /= 1024.0
+    return "%.1f %s%s" % (num, 'Yi', suffix)
+
 def update_distance_matrix(config_dict, args):
     logger = logging.getLogger('snapperdb.snpdb.update_distance_matrix')
     logger.info('Inititialising SnpDB Class')
@@ -454,6 +462,7 @@ def update_distance_matrix(config_dict, args):
     strain_list, update_strain = snpdb.get_strains()
     # # get_all_good_ids from snpdb2 takes a snp cutoff as well, here, we don't have a SNP cutoff so we set it arbitrarily high.
     snp_co = '1000000'
+
     if update_strain:
         print ("###  Populating distance matrix: " + str(datetime.datetime.now()))
         snpdb.parse_args_for_update_matrix(snp_co, strain_list)
@@ -474,6 +483,7 @@ def update_distance_matrix(config_dict, args):
             #remove connection before mp
             snpdb.snpdb_conn = None
 
+            print ('### Commparing new strains against the datebase ' + str(datetime.datetime.now()))
             futures = []
             newrows = []
             #mp the comparison against the database
@@ -490,6 +500,9 @@ def update_distance_matrix(config_dict, args):
 
             futures = []
             newrows = []
+
+            print ('### Commparing new strains against the themselves ' + str(datetime.datetime.now()))
+
 
             #remove connection before mp
             snpdb.snpdb_conn = None
