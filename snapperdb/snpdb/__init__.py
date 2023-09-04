@@ -55,6 +55,8 @@ def snippy_to_db(args, config_dict):
 
     snpdb.snpdb_annotate_vars(vcf)
 
+    snpdb.get_nlessness(args.name,None,False,False)
+
 def vcf_to_db(args, config_dict, vcf):
     #set up loggging
     logger = logging.getLogger('snapperdb.snpdb.vcf_to_db')
@@ -100,6 +102,9 @@ def vcf_to_db(args, config_dict, vcf):
     logger.info('Annotating new variants')
 
     snpdb.snpdb_annotate_vars(vcf)
+
+    snpdb.get_nlessness(args.name,None,False,False)
+
 
 # -------------------------------------------------------------------------------------------------
 

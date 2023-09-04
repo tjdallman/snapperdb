@@ -267,6 +267,18 @@ class SNPdb:
 
   # -------------------------------------------------------------------------------------------------
 
+    def add_nless_to_db(self, strain, mean, n50):
+        cur = self.snpdb_conn.cursor()
+        sql = "update strain_stats set mean_nless = %s, n50_nless = %s where name = %s"
+        cur.execute(sql, (mean, n50, strain))            
+        self.snpdb_conn.commit()
+        cur.close()
+
+
+
+
+  # -------------------------------------------------------------------------------------------------
+
 
     def get_gbk(self, gb_file):
         try:
@@ -1162,6 +1174,16 @@ class SNPdb:
             strain_ig = row[0]
         return strain_ig
 
+    def get_bad_pos_for_strain_update_matrix_list(self, strain):
+        cur = self.snpdb_conn.cursor()
+        strain_ig = {}
+        sql = "select name, ignored_pos from strains_snps where name in %s"
+        cur.execute(sql, (tuple(strain),))
+        rows = cur.fetchall()
+        for row in rows:
+            strain_ig[row[0]] = row[1]
+        return strain_ig
+
     def get_shared_ig_pos(self,strain):
         cur = self.snpdb_conn.cursor()
         strain_ig = []
@@ -1266,6 +1288,21 @@ class SNPdb:
         for i in range(0, len(l), n):
             yield l[i:i + n]
 
+# -------------------------------------------------------------------------------------------------
+
+
+    def compare_strains(self, strain1, other_strains, threshold=250):
+        similar_strains = []
+
+        for other_strain in other_strains:
+            # Calculate the symmetric difference between strain1 and the other strain
+            diff = len(set(strain1) ^ set(self.strains_snps[other_strain]))
+            
+            # Check if the difference is less than the threshold
+            if diff < threshold:
+                similar_strains.append(other_strain)
+
+        return similar_strains
 
 
 # -------------------------------------------------------------------------------------------------
@@ -1286,34 +1323,30 @@ class SNPdb:
         for strain1 in tqdm(update_strain):
             seen_strain.add(strain1)
             print ("Populating matrix for: " + strain1)
-            # get ids of all variants in strain1
-            #strain1_good_var = self.strains_snps[strain1]
             # get ids of all bad positions in strain1
             strain1_ig_pos = self.get_bad_pos_for_strain_update_matrix(strain1)
-            #strain1_ig_pos = set(self.strain_ig_pos_mp[strain1])
 
             # don't loop over the ones already seen
             data_set = set(data_list).difference(seen_strain)
-            #create chunks of dataset
-            chunksize = math.ceil(len(data_set)/int(500))
+
+            #only care abouth strains with <250 SNPs difference
+            print ("Removing large distances for: " + strain1)
+            similar_strains = self.compare_strains(self.strains_snps[strain1], data_set, threshold=250)
+            if len(similar_strains) == 0:
+                similar_strains.append(self.reference_genome)
+
+
+            #create chunks of dataset 200 at at time
+            chunksize = 200
             #chunck_list = self.chunks(data_set, chunksize)
-            #print (chunksize)
+            print ("Comparing to database: " + strain1)
 
             try:
-                for idx, one_strain in enumerate(self.chunks(list(data_set), chunksize)):
-                    #print (idx, strain1, one_strain)
-                    lookup = range(6500000)
+                for idx, one_strain in enumerate(self.chunks(list(similar_strains), chunksize)):
                     strain_ig_pos_dict = {}
-                    for strn in set(one_strain):
-                        strain_ig_pos_dict[strn] = [lookup[x] if x < 6500000 else x for x in self.get_bad_pos_for_strain_update_matrix(strn)]
-
+                    strain_ig_pos_dict = self.get_bad_pos_for_strain_update_matrix_list(one_strain)
 
                     for strain2 in one_strain:
-                        # get ids of all variants in strain2
-                        #strain2_good_var = self.strains_snps[strain2]
-                        # get ids of all bad positions in strain2
-                        # strain2_ig_pos = self.get_bad_pos_for_strain_update_matrix(strain2)
-                        #strain2_ig_pos = strain_ig_pos_dict[strain2]
                         # get union of bad position ids
                         all_bad_ids = set(strain1_ig_pos) | set(strain_ig_pos_dict[strain2]) | set(ref_ig_pos)
                         # get symmetric difference of variant ids
@@ -2066,6 +2099,10 @@ class SNPdb:
             to_update = set(dist_strain_list.keys()) - set(cluster_strain_list.keys())
             #print to_update
             seen_strains = []
+            #get accept list
+            accept = self.read_accept_list(accept)
+
+
             for strain in to_update:
                 merge_flag = 0
                 print ("### Placing "+strain+" "+str(datetime.time(datetime.now())))
@@ -2076,7 +2113,8 @@ class SNPdb:
                 update = set(to_update) - set(strain_set) - set(seen_strains)
 
                 closest_strain = self.get_closest_strain(strain, update)
-                closest_strain_snp = cluster_strain_list[closest_strain.keys()[0]]
+                closest_strain_snp = cluster_strain_list[list(closest_strain.keys())[0]]
+
 
                 print ("### Closest match "+str(closest_strain)+" "+str(closest_strain_snp)+" "+str(datetime.time(datetime.now())))
 
@@ -2084,7 +2122,7 @@ class SNPdb:
                 #copy SNP
                 new_snp =[]
                 for i, cuts in enumerate(sorted(co,reverse=True,key=int)):
-                    if int(closest_strain[closest_strain.keys()[0]]) <= int(cuts):
+                    if int(closest_strain[list(closest_strain.keys())[0]]) <= int(cuts):
                         new_snp.append(closest_strain_snp[i])
                     else:
                         new_snp.append(None)
@@ -2102,7 +2140,7 @@ class SNPdb:
                         if len(clust_check) > 1:
                             merge_record[cuts] = clust_check
                             print ("### Merge detected t:"+cuts+" "+str(clust_check)+" "+str(datetime.time(datetime.now())))
-                            if strain == accept:
+                            if strain in accept:
                                 print ("### Merge accepted "+ str(datetime.time(datetime.now())))
                                 new_snp[i] = min(clust_check)
                             else:
@@ -2247,7 +2285,7 @@ class SNPdb:
 
   # -------------------------------------------------------------------------------------------------
 
-    def get_nlessness(self, name = None, isolate_list = None, all_isolates = False, print_to_csv = True):
+    def get_nlessness(self, name = None, isolate_list = None, all_isolates = False, print_to_csv = False):
 
         '''
                 determine nlessness (a measure of how "uninterrupted" the sequence is by Ns) for a subset of isolates in self.
@@ -2283,26 +2321,47 @@ class SNPdb:
             if res:
                 ig_pos_dict = {}
                 for cont, pos in res:
-                    if ig_pos_dict.has_key(cont):
+                    if cont in ig_pos_dict:
                         ig_pos_dict[cont].append(pos)
                     else:
                         ig_pos_dict[cont] = [pos]
                 mean, n50 = self._get_nless_metrics(ig_pos_dict)
                 nless_dict[strain] = {'strain': strain, 'mean': mean, 'n50': n50}
-                print ('### Nlessness for {0} is:\n\tMean\t{1}\n\tN50\t{2}'.format(strain, nless_dict[strain]['mean'], nless_dict[strain]['n50']))
+                #add to db
+                self.add_nless_to_db(strain, mean, n50)
+                print ('### Nlessness for {0}\tMean:{1}\tN50:{2}'.format(strain, nless_dict[strain]['mean'], nless_dict[strain]['n50']))
+                #remove if bad n50
+                if n50 < 1000:
+                    self.remove_isolate(strain)
+
             else:
                 print ('### No ignored positions for {0}!'.format(strain))
-        if print_to_csv and nless_dict:
-            outname = 'nlessness_output_' + str(date.today()) + '_' + self.snpdb_name + '.csv'
-            with open(outname, 'w') as csv_out:
-                writer_res = csv.DictWriter(csv_out, fieldnames = nless_dict.items()[0][1].keys())
-                writer_res.writeheader()
-                for strain in nless_dict:
-                    writer_res.writerow(nless_dict[strain])
+        #if print_to_csv and nless_dict:
+        #    outname = 'nlessness_output_' + str(date.today()) + '_' + self.snpdb_name + '.csv'
+        #    with open(outname, 'w') as csv_out:
+        #        writer_res = csv.DictWriter(csv_out, fieldnames = nless_dict.items()[0][1].keys())
+        #        writer_res.writeheader()
+        #        for strain in nless_dict:
+        #            writer_res.writerow(nless_dict[strain])
             
                     
    # -------------------------------------------------------------------------------------------------
+    def read_accept_list(self, accept):
 
+        ''' parse ref genome for this ebg and return its length '''
+        try:
+            openfile = open(accept, 'r')
+        except:
+            print ("### File "+ accept + " not found ... ")
+            print ("### Exiting "+str(datetime.datetime.now()))
+            sys.exit()
+
+        accept_list = []
+        for line in openfile:
+            accept_list.append(line.strip())
+        return accept_list
+
+     # -------------------------------------------------------------------------------------------------
     def _get_ref_genome_len(self):
 
         ''' parse ref genome for this ebg and return its length '''
